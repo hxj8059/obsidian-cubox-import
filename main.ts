@@ -1,25 +1,114 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile, Vault } from 'obsidian';
+import JSZip from 'jszip';
+import { writeFileSync, mkdirSync } from 'fs';
+import axios from 'axios';
 
 // Remember to rename these classes and interfaces!
 
 interface MyPluginSettings {
+	myPath: string;
 	mySetting: string;
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
+	myPath: "data/",
 	mySetting: 'default'
 }
 
 export default class MyPlugin extends Plugin {
 	settings: MyPluginSettings;
 
+	async downloadAndExtract() {
+
+		const settingValue = this.settings.mySetting;
+		const settingPath = this.settings.myPath;
+		console.log(settingValue);
+		const cookies = {
+			token: settingValue,
+		};
+		
+		const headers = {
+			'authority': 'cubox.pro',
+			'accept': 'application/json, text/plain, */*',
+			'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
+			'authorization': settingValue,
+			'content-type': 'application/x-www-form-urlencoded',
+			'origin': 'https://cubox.pro',
+			'referer': 'https://cubox.pro/my/archive/all',
+			'sec-ch-ua': '"Microsoft Edge";v="119", "Chromium";v="119", "Not?A_Brand";v="24"',
+			'sec-ch-ua-mobile': '?0',
+			'sec-ch-ua-platform': '"macOS"',
+			'sec-fetch-dest': 'empty',
+			'sec-fetch-mode': 'cors',
+			'sec-fetch-site': 'same-origin',
+			'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0',
+		};
+
+		const ls_params = {
+			asc: 'false',
+			page: '1',
+			filters: '',
+			archiving: 'true'
+		}
+
+		let ls_id;
+		
+		try{ 
+			const response = await axios.get('https://cubox.pro/c/api/v2/search_engine/my', {
+				params: ls_params,
+				headers: headers
+			});
+			console.log(response.data);
+			const ids = response.data.data.map((item: any) => item.userSearchEngineID);
+			// const parsed = JSON.parse(response.data);
+			// console.log(parsed)
+			// const ids = parsed.data.map((item: any) => item.userSearchEngineID);
+			ls_id = ids.join(",");
+			console.log(ls_id)
+		}catch (error) {
+			console.error('Error occurred:', error);
+		}
+
+		const data = {
+			'engineIds': ls_id,
+			'type': 'md',
+			'snap': 'false',
+			'compressed': 'true',
+		};
+		console.log(data)
+		
+		try {
+			const response = await axios.post('https://cubox.pro/c/api/search_engines/export', data, {
+				headers: headers,
+				withCredentials: false,
+				responseType: 'arraybuffer'
+			});
+	
+			const jszip = new JSZip();
+			const zip = await jszip.loadAsync(response.data);
+	
+			Object.keys(zip.files).forEach(async (filename) => {
+				const fileData = await zip.files[filename].async('nodebuffer');
+				const extractToPath = settingPath + filename;
+				this.app.vault.create(extractToPath, fileData.toString());
+				// mkdirSync('DATA/', { recursive: true }); // Ensure directory exists
+				// writeFileSync(extractToPath, fileData);
+			});
+	
+			console.log("解压完成！");
+			new Notice('Cubox同步完成!');
+		} catch (error) {
+			console.error('Error occurred:', error);
+		}
+	}
 	async onload() {
 		await this.loadSettings();
 
 		// This creates an icon in the left ribbon.
-		const ribbonIconEl = this.addRibbonIcon('dice', 'Sample Plugin', (evt: MouseEvent) => {
+		const ribbonIconEl = this.addRibbonIcon('dice', 'sync cubox data', (evt: MouseEvent) => {
 			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
+			new Notice('开始同步！');
+			this.downloadAndExtract();
 		});
 		// Perform additional things with the ribbon
 		ribbonIconEl.addClass('my-plugin-ribbon-class');
@@ -30,10 +119,11 @@ export default class MyPlugin extends Plugin {
 
 		// This adds a simple command that can be triggered anywhere
 		this.addCommand({
-			id: 'open-sample-modal-simple',
-			name: 'Open sample modal (simple)',
+			id: 'sync-cubox',
+			name: 'Cubox-import:Sync cubox data to obsidian vault',
 			callback: () => {
-				new SampleModal(this.app).open();
+				this.downloadAndExtract();
+				// new SampleModal(this.app).open();
 			}
 		});
 		// This adds an editor command that can perform some operation on the current editor instance
@@ -121,13 +211,24 @@ class SampleSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl)
-			.setName('Setting #1')
-			.setDesc('It\'s a secret')
+			.setName('Cubox token')
+			.setDesc('The cubox token from website')
 			.addText(text => text
-				.setPlaceholder('Enter your secret')
+				.setPlaceholder('Enter your token')
 				.setValue(this.plugin.settings.mySetting)
 				.onChange(async (value) => {
 					this.plugin.settings.mySetting = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('File path')
+			.setDesc('The path to store cubox markdowns')
+			.addText(text => text
+				.setPlaceholder('path/')
+				.setValue(this.plugin.settings.myPath)
+				.onChange(async (value) => {
+					this.plugin.settings.myPath = value;
 					await this.plugin.saveSettings();
 				}));
 	}

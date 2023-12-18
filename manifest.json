@@ -1,11 +1,11 @@
 {
-	"id": "sample-plugin",
-	"name": "Sample Plugin",
-	"version": "1.0.0",
+	"id": "obsidian-cubox-import",
+	"name": "Cubox Import",
+	"version": "0.8.0",
 	"minAppVersion": "0.15.0",
-	"description": "Demonstrates some of the capabilities of the Obsidian API.",
-	"author": "Obsidian",
-	"authorUrl": "https://obsidian.md",
-	"fundingUrl": "https://obsidian.md/pricing",
+	"description": "Synchronize the archived collections in Cubox to Obsidian, allowing synchronization of the content on the first page at a time.",
+	"author": "HUANG Xiaojun",
+	"authorUrl": "https://github.com/hxj8059",
+	"fundingUrl": "https://github.com/hxj8059",
 	"isDesktopOnly": false
 }
