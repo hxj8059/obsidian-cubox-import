@@ -27,7 +27,7 @@ After installing MyPlugin, you can:
 ## Configuration
 Configure MyPlugin in the plugin settings tab:
 - **Cubox Token**: Enter your token from the Cubox website.
-![Alt text](image.png)
+![method to get token](image.png)
 - **File Path**: Set the path where you want the Cubox markdown files to be stored.
 
 ## Support
