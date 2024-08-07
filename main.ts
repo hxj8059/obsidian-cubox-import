@@ -2,17 +2,22 @@ import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Set
 import JSZip from 'jszip';
 import { writeFileSync, mkdirSync } from 'fs';
 import axios from 'axios';
+import { stringify } from 'querystring';
 
 // Remember to rename these classes and interfaces!
 
 interface CuboxImportSettings {
 	myPath: string;
 	mySetting: string;
+	pageNum: string;
+	sourceFolder: string;
 }
 
 const DEFAULT_SETTINGS: CuboxImportSettings = {
 	myPath: "data/",
-	mySetting: 'default'
+	mySetting: 'default',
+	pageNum: "1",
+	sourceFolder: "archived"
 }
 
 export default class CuboxImport extends Plugin {
@@ -22,6 +27,9 @@ export default class CuboxImport extends Plugin {
 
 		const settingValue = this.settings.mySetting;
 		const settingPath = this.settings.myPath;
+		const pageNum = this.settings.pageNum;
+		let num: number = parseFloat(pageNum);
+		const sourceFolder = this.settings.sourceFolder;
 		console.log(settingValue);
 		const cookies = {
 			token: settingValue,
@@ -46,29 +54,48 @@ export default class CuboxImport extends Plugin {
 
 		const ls_params = {
 			asc: 'false',
-			page: '1',
+			page: pageNum,
 			filters: '',
 			archiving: 'true'
 		}
 
-		let ls_id;
-		
-		try{ 
-			const response = await axios.get('https://cubox.pro/c/api/v2/search_engine/my', {
-				params: ls_params,
-				headers: headers
-			});
-			console.log(response.data);
-			const ids = response.data.data.map((item: any) => item.userSearchEngineID);
-			// const parsed = JSON.parse(response.data);
-			// console.log(parsed)
-			// const ids = parsed.data.map((item: any) => item.userSearchEngineID);
-			ls_id = ids.join(",");
-			console.log(ls_id)
-		}catch (error) {
-			console.error('Error occurred:', error);
-		}
+		// const inbox_params = {
+		// 	asc: 'false',
+		// 	page: pageNum,
+		// 	filters: '',
+		// 	archiving: 'false'
+		// }
 
+
+		let ls_id:string;
+		let url:string;
+		let ids:string[]=[];
+		if(sourceFolder == "archived") {
+			url = 'https://cubox.pro/c/api/v2/search_engine/my';
+		}else{
+			url = 'https://cubox.pro/c/api/v2/search_engine/inbox';
+			ls_params.archiving = "false";
+		}
+		for (let i = 1; i <= num; i++) {
+			ls_params.page = i.toString()
+			console.log(ls_params);
+			try{ 
+				const response = await axios.get(url, {
+					params: ls_params,
+					headers: headers
+				});
+				console.log(response.data);
+				let id = response.data.data.map((item: any) => item.userSearchEngineID);
+				ids = ids.concat(id)
+				// const parsed = JSON.parse(response.data);
+				// console.log(parsed)
+				// const ids = parsed.data.map((item: any) => item.userSearchEngineID);
+			}catch (error) {
+				console.error('Error occurred:', error);
+			}
+		}
+		ls_id = ids.join(",");
+		console.log(ls_id)
 		const data = {
 			'engineIds': ls_id,
 			'type': 'md',
@@ -231,5 +258,29 @@ class SettingTab extends PluginSettingTab {
 					this.plugin.settings.myPath = value;
 					await this.plugin.saveSettings();
 				}));
+
+		new Setting(containerEl)
+			.setName('Sync page num')
+			.setDesc('The number of pages to import')
+			.addText(text => text
+				.setPlaceholder('1')
+				.setValue(this.plugin.settings.pageNum)
+				.onChange(async (value) => {
+					this.plugin.settings.pageNum = value;
+					await this.plugin.saveSettings();
+				}));
+		
+		new Setting(containerEl)
+			.setName('Source folder')
+			.setDesc('Select a folder to import')
+			.addDropdown(dropdown => dropdown
+				.addOption('archived', 'Archived')
+				.addOption('inbox', 'Inbox')
+				.setValue(this.plugin.settings.sourceFolder)
+				.onChange(async (value) => {
+					this.plugin.settings.sourceFolder = value;
+					await this.plugin.saveSettings();
+				}));
+		
 	}
 }
